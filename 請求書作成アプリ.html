@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>請求書作成アプリ</title>
+  <!-- PDF生成ライブラリ（オンライン時のみ有効・オフライン時はブラウザ印刷にフォールバック） -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #1a56db;
+      --primary-dark: #1341b0;
+      --surface: #ffffff;
+      --bg: #f3f6fb;
+      --border: #d1ddf0;
+      --text: #1a2340;
+      --muted: #6b7a99;
+      --accent: #e8f0fd;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', 'Yu Gothic', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ===== HEADER ===== */
+    .app-header {
+      background: var(--primary);
+      color: white;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(26,86,219,0.3);
+    }
+    .app-header h1 { font-size: 19px; font-weight: 700; letter-spacing: 0.02em; }
+    .header-actions { display: flex; gap: 8px; }
+
+    /* ===== BUTTONS ===== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 7px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .btn-primary { background: white; color: var(--primary); }
+    .btn-primary:hover { background: var(--accent); }
+    .btn-success { background: #16a34a; color: white; }
+    .btn-success:hover { background: #15803d; }
+    .btn-outline {
+      background: transparent;
+      color: white;
+      border: 1.5px solid rgba(255,255,255,0.6);
+    }
+    .btn-outline:hover { background: rgba(255,255,255,0.15); }
+    .btn-add {
+      background: var(--accent);
+      color: var(--primary);
+      border: 1.5px dashed var(--primary);
+      width: 100%;
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+    }
+    .btn-add:hover { background: #d5e5fc; }
+    .btn-icon {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 16px;
+      padding: 4px;
+    }
+    .btn-icon:hover { color: var(--danger); }
+
+    /* PDF loading overlay */
+    #pdfOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    #pdfOverlay.show { display: flex; }
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ===== MAIN LAYOUT ===== */
+    .app-body {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 0;
+      min-height: calc(100vh - 57px);
+    }
+
+    /* ===== SIDEBAR (FORM) ===== */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .section-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .section-card-header {
+      background: var(--bg);
+      padding: 9px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-card-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+    /* ===== FORM ELEMENTS ===== */
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 11px; font-weight: 600; color: var(--muted); }
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      padding: 7px 10px;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      background: white;
+      color: var(--text);
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .form-group textarea { resize: vertical; min-height: 52px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    /* ===== TAX MODE TOGGLE ===== */
+    .tax-mode-toggle {
+      display: flex;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .tax-mode-toggle button {
+      flex: 1;
+      padding: 6px 4px;
+      border: none;
+      background: white;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .tax-mode-toggle button + button {
+      border-left: 1.5px solid var(--border);
+    }
+    .tax-mode-toggle button.active-excl {
+      background: #eff6ff;
+      color: var(--primary);
+    }
+    .tax-mode-toggle button.active-incl {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    /* Logo upload */
+    .logo-upload {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .logo-upload:hover { border-color: var(--primary); background: var(--accent); }
+    .logo-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+    .logo-upload img { max-height: 60px; max-width: 100%; object-fit: contain; }
+    .logo-upload-text { font-size: 12px; color: var(--muted); }
+    .logo-upload-text strong { color: var(--primary); }
+
+    /* ===== PREVIEW AREA ===== */
+    .preview-area {
+      background: var(--bg);
+      padding: 28px 32px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    /* ===== INVOICE DOCUMENT ===== */
+    .invoice-doc {
+      background: white;
+      width: 794px;
+      min-height: 1123px;
+      padding: 56px 64px;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.08);
+      border-radius: 4px;
+      position: relative;
+    }
+
+    /* Invoice Header */
+    .inv-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+    }
+    .inv-title {
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--primary);
+      letter-spacing: 0.12em;
+    }
+    .inv-logo { max-height: 80px; max-width: 200px; object-fit: contain; }
+    .inv-logo-placeholder {
+      width: 160px; height: 60px;
+      background: var(--bg);
+      border: 2px dashed var(--border);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    /* Meta info */
+    .inv-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 32px;
+      margin-bottom: 28px;
+    }
+    .inv-meta-left { flex: 1; }
+    .inv-meta-right {
+      min-width: 220px;
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 14px 18px;
+    }
+    .inv-client-label {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .inv-client-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .inv-client-address {
+      font-size: 13px;
+      color: var(--muted);
+      white-space: pre-line;
+    }
+
+    .inv-detail-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 3px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .inv-detail-row:last-child { border-bottom: none; }
+    .inv-detail-label { color: var(--muted); }
+    .inv-detail-value { font-weight: 600; }
+
+    /* Total banner */
+    .inv-total-banner {
+      background: var(--primary);
+      color: white;
+      border-radius: 8px;
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .inv-total-label { font-size: 14px; font-weight: 600; opacity: 0.9; }
+    .inv-total-amount { font-size: 26px; font-weight: 900; letter-spacing: 0.02em; }
+
+    /* Items table */
+    .inv-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+    }
+    .inv-table th {
+      background: var(--primary);
+      color: white;
+      padding: 9px 10px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .inv-table th:last-child,
+    .inv-table td:last-child { text-align: right; }
+    .inv-table th.center,
+    .inv-table td.center { text-align: center; }
+    .inv-table td {
+      padding: 8px 10px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .inv-table tr:nth-child(even) td { background: #f9faff; }
+    .inv-table tr:last-child td { border-bottom: 2px solid var(--border); }
+
+    .tax-badge {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .tax-10     { background: #fee2e2; color: #dc2626; }
+    .tax-10i    { background: #fde8e8; color: #b91c1c; border: 1px dashed #dc2626; }
+    .tax-8      { background: #fef3c7; color: #d97706; }
+    .tax-8i     { background: #fef3c7; color: #92400e; border: 1px dashed #d97706; }
+    .tax-0      { background: #f0fdf4; color: #16a34a; }
+
+    /* Subtotals */
+    .inv-subtotals {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 24px;
+    }
+    .inv-subtotals-table {
+      min-width: 290px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .inv-sub-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 7px 16px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+    }
+    .inv-sub-row:last-child { border-bottom: none; }
+    .inv-sub-row.total {
+      background: var(--accent);
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .inv-sub-label { color: var(--muted); }
+    .inv-sub-value { font-weight: 600; }
+
+    /* Bank & Notes */
+    .inv-footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .inv-footer-section h4 {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 2px solid var(--border);
+    }
+    .inv-footer-section p {
+      font-size: 13px;
+      white-space: pre-line;
+      color: var(--text);
+    }
+
+    /* Sender info */
+    .inv-sender {
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      background: var(--bg);
+      border-radius: 8px;
+      border-left: 4px solid var(--primary);
+    }
+    .inv-sender-name {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .inv-sender-info {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: pre-line;
+    }
+
+    /* Stamp */
+    .stamp {
+      position: absolute;
+      top: 56px;
+      right: 64px;
+      border: 3px solid var(--danger);
+      color: var(--danger);
+      font-size: 22px;
+      font-weight: 900;
+      padding: 4px 12px;
+      border-radius: 6px;
+      transform: rotate(-8deg);
+      opacity: 0.75;
+      letter-spacing: 0.15em;
+      display: none;
+    }
+
+    /* Empty state */
+    .empty-row td {
+      text-align: center;
+      color: var(--muted);
+      font-style: italic;
+      padding: 20px;
+    }
+
+    /* ===== PRINT / PDF STYLES ===== */
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { background: white; margin: 0; }
+      .app-header, .sidebar, #pdfOverlay, .preview-area > *:not(.invoice-doc) {
+        display: none !important;
+      }
+      .app-body { display: block; }
+      .preview-area {
+        background: white;
+        padding: 0;
+        display: block;
+        overflow: visible;
+      }
+      .invoice-doc {
+        box-shadow: none;
+        margin: 0 auto;
+        border-radius: 0;
+        width: 210mm;
+        min-height: unset;
+        padding: 14mm 18mm;
+        page-break-after: avoid;
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- PDF Overlay -->
+<div id="pdfOverlay">
+  <div class="spinner"></div>
+  <div>PDFを生成中です...</div>
+</div>
+
+<!-- APP HEADER -->
+<header class="app-header">
+  <h1>📄 請求書作成アプリ</h1>
+  <div class="header-actions">
+    <button class="btn btn-outline" onclick="resetForm()">🔄 リセット</button>
+    <button class="btn btn-outline" onclick="window.print()">🖨️ 印刷</button>
+    <button class="btn btn-primary" onclick="exportPDF()">📥 PDFで保存</button>
+    <button class="btn btn-primary" onclick="downloadHTML()">💾 HTMLで保存</button>
+  </div>
+</header>
+
+<div class="app-body">
+
+  <!-- ===== SIDEBAR FORM ===== -->
+  <aside class="sidebar">
+
+    <!-- 請求書情報 -->
+    <div class="section-card">
+      <div class="section-card-header">📋 請求書情報</div>
+      <div class="section-card-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>請求書番号</label>
+            <input type="text" id="inv_number" placeholder="INV-2024-001" oninput="updatePreview()">
+          </div>
+          <div class="form-group">
+            <label>ステータス</label>
+            <select id="inv_status" onchange="updatePreview()">
+              <option value="">—</option>
+              <option value="未払い">未払い</option>
+              <option value="支払済">支払済</option>
+              <option value="キャンセル">キャンセル</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>請求日</label>
+            <input type="date" id="inv_date" oninput="onInvDateChange()">
+          </div>
+          <div class="form-group">
+            <label>支払期限 <span style="font-weight:400;color:#aaa;">（翌月末自動）</span></label>
+            <input type="date" id="inv_due" oninput="updatePreview()">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 発行者情報 -->
+    <div class="section-card">
+      <div class="section-card-header">🏢 発行者（自社）情報</div>
+      <div class="section-card-body">
+        <div class="form-group">
+          <label>会社名 / 氏名</label>
+          <input type="text" id="sender_name" placeholder="株式会社〇〇" oninput="updatePreview()">
+        </div>
+        <div class="form-group">
+          <label>住所・連絡先</label>
+          <textarea id="sender_info" rows="3" placeholder="〒100-0001&#10;東京都千代田区〇〇1-1-1&#10;TEL: 03-xxxx-xxxx" oninput="updatePreview()"></textarea>
+        </div>
+        <div class="form-group">
+          <label>登録番号（インボイス）</label>
+          <input type="text" id="sender_regno" placeholder="T1234567890123" oninput="updatePreview()">
+        </div>
+      </div>
+    </div>
+
+    <!-- 請求先 -->
+    <div class="section-card">
+      <div class="section-card-header">👤 請求先情報</div>
+      <div class="section-card-body">
+        <div class="form-group">
+          <label>宛名（会社名 / 氏名）</label>
+          <input type="text" id="client_name" placeholder="△△株式会社 御中" value="株式会社tothnara 御中" oninput="updatePreview()">
+        </div>
+        <div class="form-group">
+          <label>住所・連絡先</label>
+          <textarea id="client_address" rows="3" placeholder="〒150-0001&#10;東京都渋谷区〇〇2-2-2" oninput="updatePreview()">奈良県奈良市松陽台3−12−13</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- 明細 -->
+    <div class="section-card">
+      <div class="section-card-header">🧾 明細行</div>
+      <div class="section-card-body" id="itemsContainer"></div>
+      <div style="padding: 0 14px 14px;">
+        <button class="btn btn-add" onclick="addItem()">＋ 明細を追加</button>
+      </div>
+    </div>
+
+    <!-- 振込先 -->
+    <div class="section-card">
+      <div class="section-card-header">🏦 振込先情報</div>
+      <div class="section-card-body">
+        <div class="form-group">
+          <label>金融機関名</label>
+          <input type="text" id="bank_name" placeholder="〇〇銀行 △△支店" oninput="updatePreview()">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>口座種別</label>
+            <select id="bank_type" onchange="updatePreview()">
+              <option value="普通">普通</option>
+              <option value="当座">当座</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>口座番号</label>
+            <input type="text" id="bank_number" placeholder="1234567" oninput="updatePreview()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>口座名義</label>
+          <input type="text" id="bank_holder" placeholder="カ）マルマル" oninput="updatePreview()">
+        </div>
+      </div>
+    </div>
+
+    <!-- 備考 -->
+    <div class="section-card">
+      <div class="section-card-header">📝 備考</div>
+      <div class="section-card-body">
+        <div class="form-group">
+          <textarea id="notes" rows="4" placeholder="お振込みの際は、振込手数料はご負担いただきますようお願い申し上げます。" oninput="updatePreview()"></textarea>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ===== PREVIEW ===== -->
+  <main class="preview-area">
+    <div class="invoice-doc" id="invoiceDoc">
+
+      <div class="stamp" id="invStamp">支払済</div>
+
+      <div class="inv-header">
+        <div class="inv-title">請 求 書</div>
+      </div>
+
+      <div class="inv-sender">
+        <div class="inv-sender-name" id="prev_sender_name">（発行者名）</div>
+        <div class="inv-sender-info" id="prev_sender_info"></div>
+        <div id="prev_sender_regno" style="font-size:12px;color:#888;margin-top:4px;"></div>
+      </div>
+
+      <div class="inv-meta">
+        <div class="inv-meta-left">
+          <div class="inv-client-label">請求先</div>
+          <div class="inv-client-name" id="prev_client_name">（宛名）</div>
+          <div class="inv-client-address" id="prev_client_address"></div>
+        </div>
+        <div class="inv-meta-right">
+          <div class="inv-detail-row">
+            <span class="inv-detail-label">請求書番号</span>
+            <span class="inv-detail-value" id="prev_inv_number">—</span>
+          </div>
+          <div class="inv-detail-row">
+            <span class="inv-detail-label">請求日</span>
+            <span class="inv-detail-value" id="prev_inv_date">—</span>
+          </div>
+          <div class="inv-detail-row">
+            <span class="inv-detail-label">支払期限</span>
+            <span class="inv-detail-value" id="prev_inv_due">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="inv-total-banner">
+        <span class="inv-total-label">ご請求金額（税込）</span>
+        <span class="inv-total-amount" id="prev_total">¥0</span>
+      </div>
+
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th style="width:38%">品目 / サービス</th>
+            <th class="center" style="width:8%">数量</th>
+            <th class="center" style="width:13%">単価</th>
+            <th class="center" style="width:11%">税率</th>
+            <th class="center" style="width:12%">消費税額</th>
+            <th style="width:18%">金額（税込）</th>
+          </tr>
+        </thead>
+        <tbody id="prev_items">
+          <tr class="empty-row"><td colspan="6">明細がありません</td></tr>
+        </tbody>
+      </table>
+
+      <div class="inv-subtotals">
+        <div class="inv-subtotals-table" id="prev_subtotals"></div>
+      </div>
+
+      <div class="inv-footer">
+        <div class="inv-footer-section" id="bankSection">
+          <h4>🏦 振込先</h4>
+          <p id="prev_bank">—</p>
+        </div>
+        <div class="inv-footer-section">
+          <h4>📝 備考</h4>
+          <p id="prev_notes">—</p>
+        </div>
+      </div>
+
+    </div><!-- /invoice-doc -->
+  </main>
+
+</div><!-- /app-body -->
+
+<script>
+// ===== STATE =====
+let logoDataURL = null;
+let items = [];
+let itemIdCounter = 0;
+
+// ===== ローカル日付フォーマット（タイムゾーン安全）=====
+function fmtLocal(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+  const today = new Date();
+  document.getElementById('inv_date').value = fmtLocal(today);
+  // 初期値：翌月末
+  const endOfNextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+  document.getElementById('inv_due').value = fmtLocal(endOfNextMonth);
+  addItem();
+  updatePreview();
+});
+
+// ===== ITEM MANAGEMENT =====
+function addItem() {
+  const id = ++itemIdCounter;
+  // taxMode: 'excl' = 外税（税抜入力）, 'incl' = 内税（税込入力）
+  items.push({ id, name: '', qty: 1, price: 0, tax: '10', taxMode: 'excl' });
+  renderItemForm();
+  updatePreview();
+}
+
+function removeItem(id) {
+  items = items.filter(i => i.id !== id);
+  renderItemForm();
+  updatePreview();
+}
+
+function setTaxMode(id, mode) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  item.taxMode = mode;
+  renderItemForm();
+  updatePreview();
+}
+
+function renderItemForm() {
+  const container = document.getElementById('itemsContainer');
+  container.innerHTML = '';
+  items.forEach((item, idx) => {
+    const isIncl = item.taxMode === 'incl';
+    const div = document.createElement('div');
+    div.style.cssText = 'border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;';
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:11px;font-weight:700;color:var(--muted);">明細 ${idx + 1}</span>
+        <button class="btn-icon" onclick="removeItem(${item.id})">🗑️</button>
+      </div>
+      <div class="form-group">
+        <label>品目 / サービス</label>
+        <input type="text" value="${escHtml(item.name)}" placeholder="Webサイト制作" oninput="updateItem(${item.id},'name',this.value)">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-group">
+          <label>数量</label>
+          <input type="number" value="${item.qty}" min="0" step="0.01" oninput="updateItem(${item.id},'qty',this.value)">
+        </div>
+        <div class="form-group">
+          <label>単価（${isIncl ? '税込' : '税抜'}）</label>
+          <input type="number" value="${item.price}" min="0" step="1" oninput="updateItem(${item.id},'price',this.value)">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="form-group">
+          <label>税率</label>
+          <select onchange="updateItem(${item.id},'tax',this.value)">
+            <option value="10" ${item.tax==='10'?'selected':''}>10%</option>
+            <option value="8"  ${item.tax==='8' ?'selected':''}>8%（軽減）</option>
+            <option value="0"  ${item.tax==='0' ?'selected':''}>0%（免税）</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>税区分</label>
+          <div class="tax-mode-toggle">
+            <button class="${!isIncl ? 'active-excl' : ''}" onclick="setTaxMode(${item.id},'excl')">外税（税抜）</button>
+            <button class="${isIncl  ? 'active-incl' : ''}" onclick="setTaxMode(${item.id},'incl')">内税（税込）</button>
+          </div>
+        </div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function updateItem(id, field, value) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  if (field === 'qty' || field === 'price') {
+    item[field] = parseFloat(value) || 0;
+  } else {
+    item[field] = value;
+  }
+  updatePreview();
+}
+
+// ===== LOGO =====
+function handleLogoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    logoDataURL = ev.target.result;
+    document.getElementById('logoPreviewWrap').innerHTML =
+      `<img src="${logoDataURL}" style="max-height:60px;max-width:100%;object-fit:contain;">`;
+    updatePreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+// ===== CALCULATIONS =====
+/**
+ * 内税・外税に応じて各値を計算
+ * 戻り値: { subtotalExcl, taxAmt, total }
+ *   subtotalExcl = 税抜小計（合計に使用）
+ *   taxAmt       = 消費税額
+ *   total        = 税込合計
+ */
+function calcItem(item) {
+  const taxRate = parseInt(item.tax) / 100;
+  const entered = item.qty * item.price;  // 入力金額 × 数量
+
+  if (item.taxMode === 'incl') {
+    // 内税：entered = 税込合計
+    const total = Math.round(entered);
+    const subtotalExcl = Math.floor(total / (1 + taxRate));
+    const taxAmt = total - subtotalExcl;
+    return { subtotalExcl, taxAmt, total, displayPrice: item.price };
+  } else {
+    // 外税：entered = 税抜小計
+    const subtotalExcl = Math.round(entered);
+    const taxAmt = Math.floor(subtotalExcl * taxRate);
+    const total = subtotalExcl + taxAmt;
+    return { subtotalExcl, taxAmt, total, displayPrice: item.price };
+  }
+}
+
+function calcTotals() {
+  let subtotalExcl = 0;
+  let tax10 = 0;
+  let tax8 = 0;
+  let grandTotal = 0;
+  items.forEach(item => {
+    const c = calcItem(item);
+    subtotalExcl += c.subtotalExcl;
+    if (item.tax === '10') tax10 += c.taxAmt;
+    if (item.tax === '8')  tax8  += c.taxAmt;
+    grandTotal   += c.total;
+  });
+  return { subtotalExcl, tax10, tax8, grandTotal };
+}
+
+// ===== FORMAT =====
+function fmtMoney(n) {
+  return '¥' + Math.round(n).toLocaleString('ja-JP');
+}
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+}
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ===== UPDATE PREVIEW =====
+function updatePreview() {
+  const g = id => document.getElementById(id);
+  const v = id => g(id) ? g(id).value : '';
+
+  // 発行者
+  g('prev_sender_name').textContent = v('sender_name') || '（発行者名）';
+  g('prev_sender_info').textContent = v('sender_info');
+  const regno = v('sender_regno');
+  g('prev_sender_regno').textContent = regno ? `適格請求書発行事業者 登録番号：${regno}` : '';
+
+  // 請求先
+  g('prev_client_name').textContent = v('client_name') || '（宛名）';
+  g('prev_client_address').textContent = v('client_address');
+
+  // 請求書情報
+  g('prev_inv_number').textContent = v('inv_number') || '—';
+  g('prev_inv_date').textContent = fmtDate(v('inv_date'));
+  g('prev_inv_due').textContent = fmtDate(v('inv_due'));
+
+  // スタンプ
+  const status = v('inv_status');
+  const stamp = g('invStamp');
+  if (status === '支払済') {
+    stamp.textContent = '支払済'; stamp.style.display = 'block';
+    stamp.style.color = '#16a34a'; stamp.style.borderColor = '#16a34a';
+  } else if (status === 'キャンセル') {
+    stamp.textContent = 'キャンセル'; stamp.style.display = 'block';
+    stamp.style.color = '#dc2626'; stamp.style.borderColor = '#dc2626';
+  } else {
+    stamp.style.display = 'none';
+  }
+
+  // 明細テーブル
+  const tbody = g('prev_items');
+  if (items.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">明細がありません</td></tr>';
+  } else {
+    tbody.innerHTML = items.map(item => {
+      const c = calcItem(item);
+      const isIncl = item.taxMode === 'incl';
+      // 税バッジ（内税は破線枠付き）
+      let taxBadge;
+      if (item.tax === '10') {
+        taxBadge = isIncl
+          ? `<span class="tax-badge tax-10i">10% 内税</span>`
+          : `<span class="tax-badge tax-10">10%</span>`;
+      } else if (item.tax === '8') {
+        taxBadge = isIncl
+          ? `<span class="tax-badge tax-8i">8% 内税</span>`
+          : `<span class="tax-badge tax-8">8%</span>`;
+      } else {
+        taxBadge = `<span class="tax-badge tax-0">0%</span>`;
+      }
+      // 単価列：入力値をそのまま表示（内税なら税込単価）
+      const unitLabel = isIncl ? fmtMoney(item.price) + '<br><span style="font-size:10px;color:#92400e;">（税込）</span>' : fmtMoney(item.price);
+      return `<tr>
+        <td>${escHtml(item.name) || '<span style="color:#aaa;font-style:italic">（未入力）</span>'}</td>
+        <td class="center">${item.qty.toLocaleString('ja-JP')}</td>
+        <td class="center" style="font-size:12px;">${unitLabel}</td>
+        <td class="center">${taxBadge}</td>
+        <td class="center">${fmtMoney(c.taxAmt)}</td>
+        <td style="text-align:right;font-weight:600;">${fmtMoney(c.total)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // 集計
+  const totals = calcTotals();
+  g('prev_total').textContent = fmtMoney(totals.grandTotal);
+
+  let rows = `
+    <div class="inv-sub-row">
+      <span class="inv-sub-label">小計（税抜）</span>
+      <span class="inv-sub-value">${fmtMoney(totals.subtotalExcl)}</span>
+    </div>`;
+  if (totals.tax10 > 0) rows += `
+    <div class="inv-sub-row">
+      <span class="inv-sub-label">消費税（10%）</span>
+      <span class="inv-sub-value">${fmtMoney(totals.tax10)}</span>
+    </div>`;
+  if (totals.tax8 > 0) rows += `
+    <div class="inv-sub-row">
+      <span class="inv-sub-label">消費税（8% 軽減）</span>
+      <span class="inv-sub-value">${fmtMoney(totals.tax8)}</span>
+    </div>`;
+  rows += `
+    <div class="inv-sub-row total">
+      <span>合計（税込）</span>
+      <span>${fmtMoney(totals.grandTotal)}</span>
+    </div>`;
+  g('prev_subtotals').innerHTML = rows;
+
+  // 振込先
+  const bankName = v('bank_name'), bankType = v('bank_type');
+  const bankNum = v('bank_number'), bankHolder = v('bank_holder');
+  g('prev_bank').textContent =
+    (bankName || bankNum || bankHolder)
+      ? [bankName, bankType && bankNum ? `${bankType} ${bankNum}` : '', bankHolder ? `口座名義：${bankHolder}` : ''].filter(Boolean).join('\n')
+      : '—';
+
+  // 備考
+  g('prev_notes').textContent = v('notes') || '—';
+}
+
+// ===== PDF EXPORT =====
+// オンライン時: html2canvas + jsPDF で自動保存
+// オフライン時: ブラウザ印刷 → "PDFとして保存" にフォールバック
+async function exportPDF() {
+
+  // ライブラリ未ロード（オフライン）→ ブラウザ印刷にフォールバック
+  if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+    alert('💡 オフラインモード\n\n印刷ダイアログが開きます。\n送信先を「PDFとして保存」に選択してください。');
+    window.print();
+    return;
+  }
+
+  const overlay = document.getElementById('pdfOverlay');
+  overlay.classList.add('show');
+  await new Promise(r => setTimeout(r, 80));
+
+  try {
+    const el = document.getElementById('invoiceDoc');
+
+    // html2canvas でキャプチャ（scale:2 で高解像度）
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      windowWidth: el.scrollWidth,
+      windowHeight: el.scrollHeight
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const { jsPDF } = window.jspdf;
+
+    // コンテンツの高さに合わせたページサイズ → 常に1枚
+    const A4_W = 210; // mm
+    const imgH = (canvas.height / canvas.width) * A4_W;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [A4_W, imgH] });
+    pdf.addImage(imgData, 'JPEG', 0, 0, A4_W, imgH);
+
+    const num = document.getElementById('inv_number').value || '請求書';
+    pdf.save(`${num}.pdf`);
+  } catch (err) {
+    // エラー時もブラウザ印刷にフォールバック
+    console.warn('PDF生成エラー、印刷にフォールバック:', err);
+    alert('PDF生成中にエラーが発生しました。\n印刷ダイアログから「PDFとして保存」を選択してください。');
+    window.print();
+  } finally {
+    overlay.classList.remove('show');
+  }
+}
+
+// ===== 請求日変更 → 支払期限を翌月末に自動設定 =====
+function onInvDateChange() {
+  const invDateEl = document.getElementById('inv_date');
+  const invDueEl  = document.getElementById('inv_due');
+  const dateStr   = invDateEl.value;
+  if (dateStr) {
+    // "YYYY-MM-DD" をローカル日付として解析（UTC解釈を避ける）
+    const [y, mo, da] = dateStr.split('-').map(Number);
+    const d = new Date(y, mo - 1, da);
+    // 翌月末 = 翌々月の1日の前日（day=0 は前月末）
+    const endOfNextMonth = new Date(d.getFullYear(), d.getMonth() + 2, 0);
+    invDueEl.value = fmtLocal(endOfNextMonth);
+  }
+  updatePreview();
+}
+
+// ===== RESET =====
+function resetForm() {
+  if (!confirm('入力内容をすべてリセットしますか？')) return;
+  ['inv_number','inv_status','sender_name','sender_info','sender_regno',
+   'client_name','client_address','bank_name','bank_number','bank_holder','notes']
+  .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('bank_type').value = '普通';
+  const today = new Date();
+  document.getElementById('inv_date').value = fmtLocal(today);
+  const endOfNextMonth2 = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+  document.getElementById('inv_due').value = fmtLocal(endOfNextMonth2);
+  items = []; itemIdCounter = 0;
+  addItem(); updatePreview();
+}
+
+// ===== DOWNLOAD HTML =====
+function downloadHTML() {
+  const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${document.getElementById('inv_number').value || '請求書'}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
