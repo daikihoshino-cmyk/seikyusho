@@ -2,7 +2,8 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#1a56db">
   <title>請求書作成アプリ</title>
   <!-- PDF生成ライブラリ（オンライン時のみ有効・オフライン時はブラウザ印刷にフォールバック） -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -41,6 +42,9 @@
       align-items: center;
       justify-content: space-between;
       box-shadow: 0 2px 8px rgba(26,86,219,0.3);
+      position: sticky;
+      top: 0;
+      z-index: 200;
     }
     .app-header h1 { font-size: 19px; font-weight: 700; letter-spacing: 0.02em; }
     .header-actions { display: flex; gap: 8px; }
@@ -116,6 +120,11 @@
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ===== MOBILE TAB BAR ===== */
+    .mobile-tabs {
+      display: none;
+    }
 
     /* ===== MAIN LAYOUT ===== */
     .app-body {
@@ -236,6 +245,11 @@
       flex-direction: column;
       align-items: center;
       gap: 16px;
+    }
+
+    /* ===== INVOICE SCALE WRAPPER ===== */
+    .invoice-scale-wrapper {
+      /* Desktop: no change needed */
     }
 
     /* ===== INVOICE DOCUMENT ===== */
@@ -468,6 +482,9 @@
       padding: 20px;
     }
 
+    /* Mobile bottom action bar (hidden on desktop) */
+    .mobile-bottom-bar { display: none; }
+
     /* ===== PRINT / PDF STYLES ===== */
     @page {
       size: A4 portrait;
@@ -476,7 +493,8 @@
     @media print {
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       body { background: white; margin: 0; }
-      .app-header, .sidebar, #pdfOverlay, .preview-area > *:not(.invoice-doc) {
+      .app-header, .sidebar, .mobile-tabs, .mobile-bottom-bar,
+      #pdfOverlay, .preview-area > *:not(.invoice-scale-wrapper) {
         display: none !important;
       }
       .app-body { display: block; }
@@ -486,6 +504,7 @@
         display: block;
         overflow: visible;
       }
+      .invoice-scale-wrapper { width: auto; height: auto !important; }
       .invoice-doc {
         box-shadow: none;
         margin: 0 auto;
@@ -495,6 +514,137 @@
         padding: 14mm 18mm;
         page-break-after: avoid;
         page-break-inside: avoid;
+        transform: none !important;
+      }
+    }
+
+    /* ===== MOBILE RESPONSIVE ===== */
+    @media (max-width: 768px) {
+
+      /* Header compact */
+      .app-header {
+        padding: 10px 14px;
+      }
+      .app-header h1 {
+        font-size: 15px;
+      }
+      /* ヘッダーのボタンはモバイルでは非表示（ボトムバーに移動） */
+      .header-actions {
+        display: none;
+      }
+
+      /* Mobile tab bar */
+      .mobile-tabs {
+        display: flex;
+        background: white;
+        border-bottom: 2px solid var(--border);
+        position: sticky;
+        top: 49px;
+        z-index: 100;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+      }
+      .mobile-tab-btn {
+        flex: 1;
+        padding: 11px 8px;
+        border: none;
+        background: transparent;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--muted);
+        cursor: pointer;
+        border-bottom: 2.5px solid transparent;
+        margin-bottom: -2px;
+        font-family: inherit;
+        transition: all 0.15s;
+      }
+      .mobile-tab-btn.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+        background: var(--accent);
+      }
+
+      /* Layout: single column, tab-controlled */
+      .app-body {
+        grid-template-columns: 1fr;
+        min-height: calc(100vh - 49px - 44px);
+      }
+
+      /* Sidebar: hidden by default, shown on tab */
+      .sidebar {
+        display: none;
+        border-right: none;
+        overflow-y: auto;
+        /* safe area for bottom bar */
+        padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+      }
+      .sidebar.mobile-visible {
+        display: flex;
+      }
+
+      /* Preview area: hidden by default, shown on tab */
+      .preview-area {
+        display: none;
+        padding: 12px 8px;
+        padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+        overflow-x: hidden;
+      }
+      .preview-area.mobile-visible {
+        display: flex;
+      }
+
+      /* Invoice scale wrapper: fills preview width */
+      .invoice-scale-wrapper {
+        width: 100%;
+        overflow: hidden;
+        /* height is set by JS based on scale */
+      }
+
+      /* Invoice doc: scaled via JS */
+      .invoice-doc {
+        transform-origin: top left;
+        /* transform: scale(x) is set by JS */
+      }
+
+      /* Form: stack 2-col rows on small screens */
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      /* Larger tap targets for inputs */
+      .form-group input,
+      .form-group textarea,
+      .form-group select {
+        padding: 9px 12px;
+        font-size: 14px;
+      }
+
+      /* Bottom action bar */
+      .mobile-bottom-bar {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        border-top: 1px solid var(--border);
+        padding: 8px 12px;
+        padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        gap: 8px;
+        z-index: 150;
+        box-shadow: 0 -4px 16px rgba(0,0,0,0.10);
+      }
+      .mobile-bottom-bar .btn {
+        flex: 1;
+        justify-content: center;
+        font-size: 12px;
+        padding: 10px 4px;
+      }
+    }
+
+    /* Very small screens */
+    @media (max-width: 375px) {
+      .mobile-bottom-bar .btn span.btn-label {
+        display: none;
       }
     }
   </style>
@@ -518,10 +668,16 @@
   </div>
 </header>
 
+<!-- Mobile tab bar (shown only on mobile) -->
+<nav class="mobile-tabs" id="mobileTabs">
+  <button class="mobile-tab-btn active" id="tabBtnForm" onclick="switchTab('form')">✏️ 入力フォーム</button>
+  <button class="mobile-tab-btn" id="tabBtnPreview" onclick="switchTab('preview')">👁️ プレビュー</button>
+</nav>
+
 <div class="app-body">
 
   <!-- ===== SIDEBAR FORM ===== -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebarEl">
 
     <!-- 請求書情報 -->
     <div class="section-card">
@@ -639,83 +795,102 @@
   </aside>
 
   <!-- ===== PREVIEW ===== -->
-  <main class="preview-area">
-    <div class="invoice-doc" id="invoiceDoc">
+  <main class="preview-area" id="previewEl">
+    <!-- スケールラッパー（モバイルでのズーム制御用） -->
+    <div class="invoice-scale-wrapper" id="invoiceScaleWrapper">
+      <div class="invoice-doc" id="invoiceDoc">
 
-      <div class="stamp" id="invStamp">支払済</div>
+        <div class="stamp" id="invStamp">支払済</div>
 
-      <div class="inv-header">
-        <div class="inv-title">請 求 書</div>
-      </div>
-
-      <div class="inv-sender">
-        <div class="inv-sender-name" id="prev_sender_name">（発行者名）</div>
-        <div class="inv-sender-info" id="prev_sender_info"></div>
-        <div id="prev_sender_regno" style="font-size:12px;color:#888;margin-top:4px;"></div>
-      </div>
-
-      <div class="inv-meta">
-        <div class="inv-meta-left">
-          <div class="inv-client-label">請求先</div>
-          <div class="inv-client-name" id="prev_client_name">（宛名）</div>
-          <div class="inv-client-address" id="prev_client_address"></div>
+        <div class="inv-header">
+          <div class="inv-title">請 求 書</div>
         </div>
-        <div class="inv-meta-right">
-          <div class="inv-detail-row">
-            <span class="inv-detail-label">請求書番号</span>
-            <span class="inv-detail-value" id="prev_inv_number">—</span>
+
+        <div class="inv-sender">
+          <div class="inv-sender-name" id="prev_sender_name">（発行者名）</div>
+          <div class="inv-sender-info" id="prev_sender_info"></div>
+          <div id="prev_sender_regno" style="font-size:12px;color:#888;margin-top:4px;"></div>
+        </div>
+
+        <div class="inv-meta">
+          <div class="inv-meta-left">
+            <div class="inv-client-label">請求先</div>
+            <div class="inv-client-name" id="prev_client_name">（宛名）</div>
+            <div class="inv-client-address" id="prev_client_address"></div>
           </div>
-          <div class="inv-detail-row">
-            <span class="inv-detail-label">請求日</span>
-            <span class="inv-detail-value" id="prev_inv_date">—</span>
+          <div class="inv-meta-right">
+            <div class="inv-detail-row">
+              <span class="inv-detail-label">請求書番号</span>
+              <span class="inv-detail-value" id="prev_inv_number">—</span>
+            </div>
+            <div class="inv-detail-row">
+              <span class="inv-detail-label">請求日</span>
+              <span class="inv-detail-value" id="prev_inv_date">—</span>
+            </div>
+            <div class="inv-detail-row">
+              <span class="inv-detail-label">支払期限</span>
+              <span class="inv-detail-value" id="prev_inv_due">—</span>
+            </div>
           </div>
-          <div class="inv-detail-row">
-            <span class="inv-detail-label">支払期限</span>
-            <span class="inv-detail-value" id="prev_inv_due">—</span>
+        </div>
+
+        <div class="inv-total-banner">
+          <span class="inv-total-label">ご請求金額（税込）</span>
+          <span class="inv-total-amount" id="prev_total">¥0</span>
+        </div>
+
+        <table class="inv-table">
+          <thead>
+            <tr>
+              <th style="width:38%">品目 / サービス</th>
+              <th class="center" style="width:8%">数量</th>
+              <th class="center" style="width:13%">単価</th>
+              <th class="center" style="width:11%">税率</th>
+              <th class="center" style="width:12%">消費税額</th>
+              <th style="width:18%">金額（税込）</th>
+            </tr>
+          </thead>
+          <tbody id="prev_items">
+            <tr class="empty-row"><td colspan="6">明細がありません</td></tr>
+          </tbody>
+        </table>
+
+        <div class="inv-subtotals">
+          <div class="inv-subtotals-table" id="prev_subtotals"></div>
+        </div>
+
+        <div class="inv-footer">
+          <div class="inv-footer-section" id="bankSection">
+            <h4>🏦 振込先</h4>
+            <p id="prev_bank">—</p>
+          </div>
+          <div class="inv-footer-section">
+            <h4>📝 備考</h4>
+            <p id="prev_notes">—</p>
           </div>
         </div>
-      </div>
 
-      <div class="inv-total-banner">
-        <span class="inv-total-label">ご請求金額（税込）</span>
-        <span class="inv-total-amount" id="prev_total">¥0</span>
-      </div>
-
-      <table class="inv-table">
-        <thead>
-          <tr>
-            <th style="width:38%">品目 / サービス</th>
-            <th class="center" style="width:8%">数量</th>
-            <th class="center" style="width:13%">単価</th>
-            <th class="center" style="width:11%">税率</th>
-            <th class="center" style="width:12%">消費税額</th>
-            <th style="width:18%">金額（税込）</th>
-          </tr>
-        </thead>
-        <tbody id="prev_items">
-          <tr class="empty-row"><td colspan="6">明細がありません</td></tr>
-        </tbody>
-      </table>
-
-      <div class="inv-subtotals">
-        <div class="inv-subtotals-table" id="prev_subtotals"></div>
-      </div>
-
-      <div class="inv-footer">
-        <div class="inv-footer-section" id="bankSection">
-          <h4>🏦 振込先</h4>
-          <p id="prev_bank">—</p>
-        </div>
-        <div class="inv-footer-section">
-          <h4>📝 備考</h4>
-          <p id="prev_notes">—</p>
-        </div>
-      </div>
-
-    </div><!-- /invoice-doc -->
+      </div><!-- /invoice-doc -->
+    </div><!-- /invoice-scale-wrapper -->
   </main>
 
 </div><!-- /app-body -->
+
+<!-- Mobile bottom action bar -->
+<div class="mobile-bottom-bar">
+  <button class="btn" style="background:var(--bg);color:var(--text);border:1.5px solid var(--border);" onclick="resetForm()">
+    🔄 <span class="btn-label">リセット</span>
+  </button>
+  <button class="btn" style="background:var(--bg);color:var(--text);border:1.5px solid var(--border);" onclick="window.print()">
+    🖨️ <span class="btn-label">印刷</span>
+  </button>
+  <button class="btn" style="background:var(--primary);color:white;" onclick="exportPDF()">
+    📥 <span class="btn-label">PDF保存</span>
+  </button>
+  <button class="btn" style="background:var(--bg);color:var(--text);border:1.5px solid var(--border);" onclick="downloadHTML()">
+    💾 <span class="btn-label">HTML保存</span>
+  </button>
+</div>
 
 <script>
 // ===== STATE =====
@@ -740,6 +915,75 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('inv_due').value = fmtLocal(endOfNextMonth);
   addItem();
   updatePreview();
+  initMobile();
+});
+
+// ===== MOBILE TAB SWITCHING =====
+let currentTab = 'form';
+
+function switchTab(tab) {
+  currentTab = tab;
+  const sidebar = document.getElementById('sidebarEl');
+  const preview = document.getElementById('previewEl');
+  const tabForm = document.getElementById('tabBtnForm');
+  const tabPreview = document.getElementById('tabBtnPreview');
+
+  if (tab === 'form') {
+    sidebar.classList.add('mobile-visible');
+    preview.classList.remove('mobile-visible');
+    tabForm.classList.add('active');
+    tabPreview.classList.remove('active');
+  } else {
+    sidebar.classList.remove('mobile-visible');
+    preview.classList.add('mobile-visible');
+    tabForm.classList.remove('active');
+    tabPreview.classList.add('active');
+    // プレビュー表示時にスケール更新
+    setTimeout(updateInvoiceScale, 50);
+  }
+}
+
+function updateInvoiceScale() {
+  const wrapper = document.getElementById('invoiceScaleWrapper');
+  const doc = document.getElementById('invoiceDoc');
+  if (!wrapper || !doc) return;
+
+  if (window.innerWidth > 768) {
+    // デスクトップ: スケールなし
+    doc.style.transform = '';
+    doc.style.transformOrigin = '';
+    wrapper.style.height = '';
+    return;
+  }
+
+  // モバイル: 794px の invoice-doc を wrapper 幅に収まるようスケール
+  const availableWidth = wrapper.clientWidth;
+  const scale = availableWidth / 794;
+  doc.style.transform = `scale(${scale})`;
+  doc.style.transformOrigin = 'top left';
+  // wrapper の高さ = 縮小後の実際の高さ
+  const docHeight = Math.max(doc.scrollHeight, 1123);
+  wrapper.style.height = (docHeight * scale) + 'px';
+}
+
+function initMobile() {
+  if (window.innerWidth <= 768) {
+    // モバイル: 初期は入力フォームタブを表示
+    switchTab(currentTab);
+  } else {
+    // デスクトップ: 両方表示（クラス不要）
+    document.getElementById('sidebarEl').classList.remove('mobile-visible');
+    document.getElementById('previewEl').classList.remove('mobile-visible');
+    updateInvoiceScale();
+  }
+}
+
+// リサイズ時に再初期化
+window.addEventListener('resize', () => {
+  initMobile();
+  if (currentTab === 'preview' || window.innerWidth > 768) {
+    updateInvoiceScale();
+  }
 });
 
 // ===== ITEM MANAGEMENT =====
@@ -998,6 +1242,11 @@ function updatePreview() {
 
   // 備考
   g('prev_notes').textContent = v('notes') || '—';
+
+  // モバイル時: プレビュー表示中ならスケール再計算
+  if (window.innerWidth <= 768 && currentTab === 'preview') {
+    updateInvoiceScale();
+  }
 }
 
 // ===== PDF EXPORT =====
@@ -1019,6 +1268,16 @@ async function exportPDF() {
   try {
     const el = document.getElementById('invoiceDoc');
 
+    // モバイル時のスケールを一時リセットしてキャプチャ
+    const prevTransform = el.style.transform;
+    const prevOrigin = el.style.transformOrigin;
+    const prevWrapperHeight = document.getElementById('invoiceScaleWrapper').style.height;
+    el.style.transform = '';
+    el.style.transformOrigin = '';
+    document.getElementById('invoiceScaleWrapper').style.height = '';
+
+    await new Promise(r => setTimeout(r, 30));
+
     // html2canvas でキャプチャ（scale:2 で高解像度）
     const canvas = await html2canvas(el, {
       scale: 2,
@@ -1028,6 +1287,11 @@ async function exportPDF() {
       windowWidth: el.scrollWidth,
       windowHeight: el.scrollHeight
     });
+
+    // スケールを元に戻す
+    el.style.transform = prevTransform;
+    el.style.transformOrigin = prevOrigin;
+    document.getElementById('invoiceScaleWrapper').style.height = prevWrapperHeight;
 
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const { jsPDF } = window.jspdf;
