@@ -787,7 +787,7 @@
       <div class="section-card-header">📝 備考</div>
       <div class="section-card-body">
         <div class="form-group">
-          <textarea id="notes" rows="4" placeholder="お振込みの際は、振込手数料はご負担いただきますようお願い申し上げます。" oninput="updatePreview()"></textarea>
+          <textarea id="notes" rows="4" placeholder="お振込みの際は、振込手数料はご負担いただきますようお願い申し上げます。" oninput="updatePreview()">お振込みの際は、振込手数料はご負担いただきますようお願い申し上げます。</textarea>
         </div>
       </div>
     </div>
@@ -990,7 +990,7 @@ window.addEventListener('resize', () => {
 function addItem() {
   const id = ++itemIdCounter;
   // taxMode: 'excl' = 外税（税抜入力）, 'incl' = 内税（税込入力）
-  items.push({ id, name: '', qty: 1, price: 0, tax: '10', taxMode: 'excl' });
+  items.push({ id, name: '', qty: 1, price: 0, tax: '10', taxMode: 'incl' });
   renderItemForm();
   updatePreview();
 }
